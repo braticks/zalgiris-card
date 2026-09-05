@@ -2,7 +2,9 @@
 
 Home Assistant „Lovelace“ korta, skirta [Žalgiris Matches](https://github.com/braticks/zalgiris_matches) integracijai.
 
-Rodo artimiausias rungtynes, varžovų logotipus, turnyrą, transliuotoją, rungtynių pradžios laiką, tiesioginį rezultatą ir artėjančių rungtynių sąrašą.\n\n![Žalgiris Card Home Assistant korta](images/zalgiris-card.png)
+Rodo artimiausias rungtynes, varžovų logotipus, turnyrą, transliuotoją, rungtynių pradžios laiką, tiesioginį rezultatą ir artėjančių rungtynių sąrašą.
+
+![Žalgiris Card Home Assistant korta](images/zalgiris-card.png)
 
 ## Būtina integracija
 
