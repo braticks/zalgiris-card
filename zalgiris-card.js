@@ -9,7 +9,7 @@
  *   show_league: true
  */
 
-const CARD_VERSION = "2.0.1";
+const CARD_VERSION = "2.0.2";
 const ZALGIRIS_RE = /žalgiris|zalgiris/i;
 
 function escapeHtml(value) {
@@ -96,14 +96,14 @@ function leagueColor(league) {
 // ─── Žaidimo būsenos nustatymas ───
 
 function gameState(g) {
-  if (g.is_live) return "IN";
+  if (g.is_live === true) return "IN";
+  if (g.status === "finished") return "POST";
   const now = Date.now();
   const start = g.start ? new Date(g.start).getTime() : null;
   if (!start) return "PRE";
   if (start > now) return "PRE";
   // Baigtas: praėjo >3 val. arba yra rezultatas
   if (start < now - 3 * 3600 * 1000) return "POST";
-  if (g.score_home != null && g.score_away != null) return "POST";
   return "IN"; // prasidėjo, bet nėra rezultato – laikome live
 }
 
@@ -274,8 +274,8 @@ class ZalgirisCard extends HTMLElement {
       };
     } else {
       return {
-        left:  { ...away, score: g.score_away },
-        right: { ...home, score: g.score_home },
+        left:  { ...home, score: g.score_home },
+        right: { ...away, score: g.score_away },
         zalLeft: false,
       };
     }
@@ -319,13 +319,13 @@ class ZalgirisCard extends HTMLElement {
   _buildIN(g) {
     const { left, right } = this._sides(g);
     const cfg = this._config;
-    const period = [g.live_period, g.live_clock].filter(Boolean).join(" · ") || "LIVE";
+    const period = [g.live_period, g.live_clock].filter(Boolean).join(" · ") || "Laukiama duomenų";
     const title = cfg.show_league && g.league ? `<div class="card-title">${g.league}</div>` : "";
 
     return `
       ${bgLogos(left.logo, right.logo)}
       <div class="center-top">
-        <div class="live-badge">Live</div>
+        <div class="live-badge">${g.is_live === true ? "Live" : "Prasidėjo pagal tvarkaraštį"}</div>
       </div>
       ${title}
       <div class="teams-row">
@@ -377,7 +377,7 @@ class ZalgirisCard extends HTMLElement {
           <div class="score">${lScore}</div>
         </div>
         <div class="game-center">
-          <div class="post-result">Baigta</div>
+          <div class="post-result">${g.status === "finished" ? "Baigta" : "Praėjusios rungtynės"}</div>
           ${won ? `<div class="post-won">${won}</div>` : ""}
         </div>
         <div style="display:flex;flex-direction:column;align-items:center;width:36%">

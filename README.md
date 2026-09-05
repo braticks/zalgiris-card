@@ -8,6 +8,10 @@ Rodo artimiausias rungtynes, varžovų logotipus, turnyrą, transliuotoją, rung
 
 ## Būtina integracija
 
+Kortos versija: **2.0.2**. Rekomenduojama integracija: **2.0.5** arba naujesnė.
+
+Rezultatai atnaujinami integracijos nustatytu intervalu (numatyta 10 min.), ne nuolatiniu srautu. Be patvirtinto `is_live` lauko korta pirmas 3 valandas rodo „Prasidėjo pagal tvarkaraštį“, o vėliau „Praėjusios rungtynės“ — tai nėra patvirtinta rungtynių būsena. Transliuotojas ir rezultatas matomi tik gavus šiuos duomenis iš integracijos.
+
 Pirmiausia įdiekite ir sukonfigūruokite [Žalgiris Matches](https://github.com/braticks/zalgiris_matches). Kortai reikalingas integracijos rungtynių sąrašo sensorius.
 
 ## Diegimas per HACS
