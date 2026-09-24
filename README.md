@@ -6,9 +6,36 @@ Rodo artimiausias rungtynes, varžovų logotipus, turnyrą, transliuotoją, rung
 
 ![Žalgiris Card Home Assistant korta](images/zalgiris-card.png)
 
+## Filtrai ir datos akcentas (2.0.3)
+
+Pasiūlymas: [juzis28, issue #1](https://github.com/braticks/zalgiris-card/issues/1).
+
+```yaml
+type: custom:zalgiris-card
+entity: sensor.zalgiris_rungtyniu_sarasas
+count: 5
+league: eurolyga
+venue: home
+show_filters: true
+accent: date
+```
+
+| Parinktis | Numatyta | Galimos reikšmės |
+| --- | --- | --- |
+| `league` | `all` | `all`, `eurolyga`, `lkl`, `kmt` arba sąrašas, pvz. `[eurolyga, lkl]` |
+| `venue` | `all` | `all`, `home`, `away` |
+| `show_filters` | `false` | Rodyti lygos ir namų / išvykos mygtukus |
+| `accent` | `time` | `date` išryškina datą; `time` išlaiko esamą vaizdą |
+
+Lygos ir vietos filtrai veikia kartu, pagrindinėms rungtynėms ir sąrašui. `all` apima ir draugiškas ar nežinomos lygos rungtynes. Kelios lygos pasirenkamos YAML sąrašu; paspaudus lygos mygtuką pasirenkama viena lyga. Mygtukų pasirinkimai galioja tik tai kortai iki jos perkūrimo ar puslapio perkrovimo; tada vėl taikomas YAML. Nustatymai nesaugomi naršyklėje ir nesimaišo tarp kortų.
+
+Integracijos keisti nereikia, papildomų užklausų serveriui filtrai nesiunčia. `accent` keičia būsimos dvikovos ir sąrašo datos / laiko išdėstymą; rezultatų rodymas lieka toks pats.
+
+English: optional league and home/away filters apply to both the main game and schedule. Filter buttons are off by default; `accent: time` preserves the existing appearance. Button selections are local to each card instance and reset to YAML on reload.
+
 ## Būtina integracija
 
-Kortos versija: **2.0.2**. Rekomenduojama integracija: **2.0.5** arba naujesnė.
+Kortos versija: **2.0.3**. Rekomenduojama integracija: **2.0.6** arba naujesnė.
 
 Rezultatai atnaujinami integracijos nustatytu intervalu (numatyta 10 min.), ne nuolatiniu srautu. Be patvirtinto `is_live` lauko korta pirmas 3 valandas rodo „Prasidėjo pagal tvarkaraštį“, o vėliau „Praėjusios rungtynės“ — tai nėra patvirtinta rungtynių būsena. Transliuotojas ir rezultatas matomi tik gavus šiuos duomenis iš integracijos.
 

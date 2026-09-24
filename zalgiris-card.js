@@ -1,5 +1,5 @@
 /**
- * zalgiris-card v2.0.1
+ * zalgiris-card v2.0.3
  * Veikia tik su sensor.zalgiris_rungtyniu_sarasas
  *
  * Konfigūracija:
@@ -9,8 +9,26 @@
  *   show_league: true
  */
 
-const CARD_VERSION = "2.0.2";
+const CARD_VERSION = "2.0.3";
 const ZALGIRIS_RE = /žalgiris|zalgiris/i;
+
+function leagueKey(value) {
+  const key = String(value ?? "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const aliases = {
+    eurolyga: "eurolyga", euroleague: "eurolyga",
+    lkl: "lkl", "lietuvos krepsinio lyga": "lkl",
+    kmt: "kmt", "mindaugo taure": "kmt", "karaliaus mindaugo taure": "kmt",
+  };
+  return aliases[key] || key;
+}
+
+function filterGames(games, leagues, venue) {
+  return games.filter(g => g && typeof g === "object" &&
+    (leagues.includes("all") || leagues.includes(leagueKey(g.league))) &&
+    (venue === "all" || (venue === "home"
+      ? ZALGIRIS_RE.test(g.home || "") && !ZALGIRIS_RE.test(g.away || "")
+      : ZALGIRIS_RE.test(g.away || "") && !ZALGIRIS_RE.test(g.home || ""))));
+}
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -214,6 +232,15 @@ const STYLES = `
   .s-score { font-size: 0.95em; font-weight: 700; white-space: nowrap; flex-shrink: 0; text-align: right; }
 
   .empty { text-align: center; padding: 14px 0; opacity: 0.45; font-size: 0.9em; }
+  .filters { position: relative; z-index: 1; margin-bottom: 12px; }
+  .filter-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+  .filter-row button { font: inherit; font-size: 0.8em; color: var(--primary-text-color); background: var(--card-background-color); border: 1px solid var(--divider-color, #888); border-radius: 14px; padding: 5px 10px; cursor: pointer; }
+  .filter-row button[aria-pressed="true"] { background: var(--primary-color, #00642f); color: var(--text-primary-color, white); }
+  .filter-row button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+  .accent-date .game-weekday { font-size: 1.55em; font-weight: 700; }
+  .accent-date .game-time { font-size: 1.15em; opacity: 0.75; }
+  .accent-date .s-time { max-width: 38%; }
+  .accent-date .s-time-val { font-size: 1em; line-height: 1.2; }
 `;
 
 // ─── Pagalbiniai HTML ───
@@ -241,15 +268,42 @@ class ZalgirisCard extends HTMLElement {
   constructor() {
     super();
     this.attachShadow({ mode: "open" });
+    this.shadowRoot.addEventListener("click", event => {
+      const button = event.target.closest?.("button[data-filter]");
+      if (!button || !this._config?.show_filters) return;
+      const { filter, value } = button.dataset;
+      if (filter === "league") this._selectedLeague = [value];
+      if (filter === "venue") this._selectedVenue = value;
+      this._render();
+    });
   }
 
   setConfig(config) {
     if (!config.entity) throw new Error("entity yra privalomas");
+    const leagues = (Array.isArray(config.league) ? config.league : [config.league ?? "all"]).map(leagueKey);
+    if (!leagues.length || leagues.some(l => !["all", "eurolyga", "lkl", "kmt"].includes(l))) {
+      throw new Error("league: all, eurolyga, lkl, kmt arba jų sąrašas");
+    }
+    const venue = config.venue ?? "all";
+    const accent = config.accent ?? "time";
+    if (!["all", "home", "away"].includes(venue)) throw new Error("venue: all, home arba away");
+    if (!["time", "date"].includes(accent)) throw new Error("accent: time arba date");
     this._config = {
       ...config,
       count: Math.max(1, Math.min(20, Number.parseInt(config.count ?? 5, 10) || 5)),
       show_league: config.show_league !== false,
+      show_filters: config.show_filters === true,
+      league: leagues, venue, accent,
     };
+    this._selectedLeague = [...leagues];
+    this._selectedVenue = venue;
+    this._render();
+  }
+
+  _buildFilters() {
+    const row = (kind, label, options, selected) => `<div class="filter-row" role="group" aria-label="${label}">${options.map(([value, text]) =>
+      `<button type="button" data-filter="${kind}" data-value="${value}" aria-pressed="${selected.includes(value)}">${text}</button>`).join("")}</div>`;
+    return `<div class="filters">${row("league", "Lyga", [["all", "Visos lygos"], ["eurolyga", "Eurolyga"], ["lkl", "LKL"], ["kmt", "KMT"]], this._selectedLeague)}${row("venue", "Rungtynių vieta", [["all", "Visos"], ["home", "Namie"], ["away", "Išvykoje"]], [this._selectedVenue])}</div>`;
   }
 
   set hass(hass) {
@@ -284,7 +338,7 @@ class ZalgirisCard extends HTMLElement {
   _buildPRE(g) {
     const { left, right } = this._sides(g);
     const cfg = this._config;
-    const weekday = relDay(g.start);
+    const weekday = cfg.accent === "date" ? fmtDateShort(g.start) : relDay(g.start);
     const d = g.start ? new Date(g.start) : null;
     const today = new Date();
     const tom = new Date(); tom.setDate(today.getDate() + 1);
@@ -304,7 +358,7 @@ class ZalgirisCard extends HTMLElement {
         </a>
         <div class="game-center">
           <div class="game-weekday">${weekday}</div>
-          ${dateExtra ? `<div class="game-dateextra">${dateExtra}</div>` : ""}
+          ${dateExtra && cfg.accent !== "date" ? `<div class="game-dateextra">${dateExtra}</div>` : ""}
           <div class="game-time">${time}</div>
           ${kof ? `<div class="game-kickoff">${kof}</div>` : ""}
         </div>
@@ -430,8 +484,8 @@ class ZalgirisCard extends HTMLElement {
             </div>
           </div>
           ${scoreEl || `<div class="s-time">
-            <div class="s-time-val">${fmtTime(g.start)}</div>
-            <div class="s-date-val">${fmtDateShort(g.start)}</div>
+            <div class="s-time-val">${this._config.accent === "date" ? fmtDateShort(g.start) : fmtTime(g.start)}</div>
+            <div class="s-date-val">${this._config.accent === "date" ? fmtTime(g.start) : fmtDateShort(g.start)}</div>
           </div>`}
         </a>`;
     }
@@ -450,10 +504,9 @@ class ZalgirisCard extends HTMLElement {
       return;
     }
 
-    const upcoming = Array.isArray(stateObj.attributes.upcoming)
-      ? stateObj.attributes.upcoming.map(safeGame) : [];
-    const finished = Array.isArray(stateObj.attributes.finished)
-      ? stateObj.attributes.finished.map(safeGame) : [];
+    const filtered = values => filterGames(Array.isArray(values) ? values : [], this._selectedLeague, this._selectedVenue).map(safeGame);
+    const upcoming = filtered(stateObj.attributes.upcoming);
+    const finished = filtered(stateObj.attributes.finished);
 
     // Nustatome pagrindinį žaidimą rodymui
     // 1. Live žaidimas upcoming arba finished sąraše
@@ -484,7 +537,8 @@ class ZalgirisCard extends HTMLElement {
 
     this.shadowRoot.innerHTML = `
       <style>${STYLES}</style>
-      <ha-card>
+      <ha-card class="accent-${cfg.accent}">
+        ${cfg.show_filters ? this._buildFilters() : ""}
         ${mainHTML}
         ${schedHTML}
       </ha-card>`;
