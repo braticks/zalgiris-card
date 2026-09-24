@@ -6,6 +6,14 @@ Rodo artimiausias rungtynes, varžovų logotipus, turnyrą, transliuotoją, rung
 
 ![Žalgiris Card Home Assistant korta](images/zalgiris-card.png)
 
+## Vizualus redaktorius (2.0.4)
+
+Dashboard → Redaguoti → kortos „Redaguoti“. Formoje galite pasirinkti sensorių (paieška pagal entity ID), rungtynių skaičių, vieną ar kelias lygas, namų / išvykos filtrą, datos / laiko akcentą ir rodymo jungiklius. Spauskite **Išsaugoti** — parinktys išliks kortos konfigūracijoje ir perkrovus puslapį. YAML tebėra palaikomas.
+
+Jei forma nerodoma, atnaujinkite kortą per HACS ir perkraukite naršyklę išvalydami podėlį. Redaktoriaus parinktys išsaugomos HA; pačios kortos filtrų mygtukai tebėra laikini.
+
+English: the visual card editor supports the sensor, game count, multiple leagues, venue, date/time emphasis and display toggles. Save through Home Assistant to persist settings. YAML and existing extra configuration fields remain supported.
+
 ## Filtrai ir datos akcentas (2.0.3)
 
 Pasiūlymas: [juzis28, issue #1](https://github.com/braticks/zalgiris-card/issues/1).
@@ -35,7 +43,7 @@ English: optional league and home/away filters apply to both the main game and s
 
 ## Būtina integracija
 
-Kortos versija: **2.0.3**. Rekomenduojama integracija: **2.0.6** arba naujesnė.
+Kortos versija: **2.0.4**. Rekomenduojama integracija: **2.0.6** arba naujesnė.
 
 Rezultatai atnaujinami integracijos nustatytu intervalu (numatyta 10 min.), ne nuolatiniu srautu. Be patvirtinto `is_live` lauko korta pirmas 3 valandas rodo „Prasidėjo pagal tvarkaraštį“, o vėliau „Praėjusios rungtynės“ — tai nėra patvirtinta rungtynių būsena. Transliuotojas ir rezultatas matomi tik gavus šiuos duomenis iš integracijos.
 

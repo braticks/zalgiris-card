@@ -4,7 +4,7 @@ const vm = require('node:vm');
 const fs = require('node:fs');
 const path = require('node:path');
 const code = fs.readFileSync(path.join(__dirname, '../zalgiris-card.js'), 'utf8');
-const context = vm.createContext({HTMLElement: class { attachShadow() { this.shadowRoot = {innerHTML: '', addEventListener: (type, fn) => {this.click = fn;}}; } }, customElements: {get() {}, define() {}}, window: {}, console});
+const context = vm.createContext({HTMLElement: class { dispatchEvent(event) { this.lastEvent = event; } attachShadow() { this.shadowRoot = {innerHTML: '', addEventListener: (type, fn) => {this.click = fn;}}; } }, CustomEvent: class { constructor(type, options) { this.type = type; Object.assign(this, options); } }, document: {createElement: tag => ({tagName:tag})}, customElements: {get() {}, define() {}}, window: {}, console});
 vm.runInContext(code, context);
 test('partial and tied scores are not treated as finished', () => {
   context.game = {start: new Date(Date.now() - 600000).toISOString(), score_home: 50, score_away: 50};
@@ -62,4 +62,40 @@ test('filters apply before main game selection to both arrays', () => {
   assert.ok(!html.includes('EXCLUDED'));
   assert.ok(html.includes('class="accent-date"'));
   assert.ok(html.includes('aria-pressed="true"'));
+});
+test('editor discovery and suggested sensor', () => {
+  assert.equal(vm.runInContext('ZalgirisCard.getConfigElement().tagName', context), 'zalgiris-card-editor');
+  const stub = vm.runInContext(`ZalgirisCard.getStubConfig({states:{'sensor.renamed':{attributes:{upcoming:[]}}}})`, context);
+  assert.equal(stub.entity, 'sensor.renamed');
+  assert.equal(stub.show_filters, false);
+});
+test('editor changes dispatch complete config and preserve unrelated fields', () => {
+  vm.runInContext(`globalThis.editor = new ZalgirisCardEditor();
+    globalThis.original = {type:'custom:zalgiris-card',entity:'sensor.games',card_mod:{style:'test'}};
+    editor.setConfig(original);
+    editor._changed({target:{dataset:{key:'show_filters'},type:'checkbox',checked:true}});`, context);
+  const event = vm.runInContext('editor.lastEvent', context);
+  assert.equal(event.type, 'config-changed');
+  assert.equal(event.bubbles, true);
+  assert.equal(event.composed, true);
+  assert.equal(event.detail.config.show_filters, true);
+  assert.equal(event.detail.config.card_mod.style, 'test');
+  assert.equal(vm.runInContext('original.show_filters', context), undefined);
+});
+test('editor supports multiple leagues and resets empty selection to all', () => {
+  vm.runInContext(`editor._changed({target:{dataset:{key:'league'},type:'checkbox',value:'eurolyga',checked:true}});
+    editor._changed({target:{dataset:{key:'league'},type:'checkbox',value:'lkl',checked:true}});`, context);
+  assert.equal(vm.runInContext('editor._config.league.join(",")', context), 'eurolyga,lkl');
+  vm.runInContext(`editor._changed({target:{dataset:{key:'league'},type:'checkbox',value:'all',checked:true}});`, context);
+  assert.equal(vm.runInContext('editor._config.league.join(",")', context), 'all');
+});
+test('editor rejects invalid count and escapes entity markup', () => {
+  vm.runInContext(`editor._changed({target:{dataset:{key:'count'},value:'30',reportValidity(){}}});
+    editor.setConfig({entity:'sensor.<img>',count:5});
+    editor.hass = {states:{'sensor.real':{attributes:{}}}};`, context);
+  assert.equal(vm.runInContext('editor._config.count', context), 5);
+  const html = vm.runInContext('editor.shadowRoot.innerHTML', context);
+  assert.ok(html.includes('sensor.&lt;img&gt;'));
+  assert.ok(html.includes('sensor.real'));
+  for(const field of ['entity','count','league','venue','accent','show_filters','show_league']) assert.ok(html.includes(`data-key="${field}"`));
 });

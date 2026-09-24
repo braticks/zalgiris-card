@@ -1,5 +1,5 @@
 /**
- * zalgiris-card v2.0.3
+ * zalgiris-card v2.0.4
  * Veikia tik su sensor.zalgiris_rungtyniu_sarasas
  *
  * Konfigūracija:
@@ -9,7 +9,7 @@
  *   show_league: true
  */
 
-const CARD_VERSION = "2.0.3";
+const CARD_VERSION = "2.0.4";
 const ZALGIRIS_RE = /žalgiris|zalgiris/i;
 
 function leagueKey(value) {
@@ -264,6 +264,17 @@ function sLogoEl(src, abbr) {
 // ─── Kortos klasė ───
 
 class ZalgirisCard extends HTMLElement {
+
+  static getConfigElement() {
+    return document.createElement("zalgiris-card-editor");
+  }
+
+  static getStubConfig(hass) {
+    const entity = Object.keys(hass?.states || {}).find(id => id.startsWith("sensor.") &&
+      Array.isArray(hass.states[id].attributes?.upcoming));
+    return { entity: entity || "sensor.zalgiris_rungtyniu_sarasas", count: 5,
+      league: "all", venue: "all", accent: "time", show_filters: false, show_league: true };
+  }
 
   constructor() {
     super();
@@ -543,6 +554,89 @@ class ZalgirisCard extends HTMLElement {
         ${schedHTML}
       </ha-card>`;
   }
+}
+
+class ZalgirisCardEditor extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this.shadowRoot.addEventListener("change", event => this._changed(event));
+  }
+
+  setConfig(config) {
+    this._config = { ...config };
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    const sensors = Object.keys(hass?.states || {}).filter(id => id.startsWith("sensor.")).sort();
+    const signature = JSON.stringify(sensors);
+    if (signature !== this._sensorsSignature) {
+      this._sensorsSignature = signature;
+      this._sensors = sensors;
+      this._render();
+    }
+  }
+
+  _changed(event) {
+    const input = event.target;
+    const key = input.dataset?.key;
+    if (!this._config || !["entity", "count", "league", "venue", "accent", "show_filters", "show_league"].includes(key)) return;
+    let value = input.type === "checkbox" ? input.checked : input.value;
+    if (key === "count") {
+      value = Number(value);
+      if (!Number.isInteger(value) || value < 1 || value > 20) { input.reportValidity(); return; }
+    }
+    if (key === "entity" && !value.trim()) return;
+    if (key === "league") {
+      const current = this._config.league ?? "all";
+      let leagues = (Array.isArray(current) ? current : [current]).map(leagueKey);
+      const item = input.value;
+      if (item === "all") leagues = ["all"];
+      else {
+        leagues = leagues.filter(l => l !== "all" && l !== item);
+        if (input.checked) leagues.push(item);
+      }
+      value = leagues.length ? leagues : ["all"];
+    }
+    this._config = { ...this._config, [key]: value };
+    this.dispatchEvent(new CustomEvent("config-changed", {
+      detail: { config: { ...this._config } }, bubbles: true, composed: true,
+    }));
+    if (key === "league") this._render();
+  }
+
+  _render() {
+    if (!this._config) return;
+    const cfg = this._config;
+    const leagues = (Array.isArray(cfg.league) ? cfg.league : [cfg.league ?? "all"]).map(leagueKey);
+    const select = (key, label, options, value) => `<label>${label}<select data-key="${key}">${options.map(([id, title]) => `<option value="${id}" ${id === value ? "selected" : ""}>${title}</option>`).join("")}</select></label>`;
+    this.shadowRoot.innerHTML = `
+      <style>
+        :host{display:block;color:var(--primary-text-color);font-family:var(--primary-font-family, sans-serif)}
+        .form{display:grid;gap:16px;padding:8px 0} label{display:grid;gap:6px;font-size:14px}
+        input:not([type=checkbox]),select{box-sizing:border-box;width:100%;padding:10px;font:inherit;color:var(--primary-text-color);background:var(--card-background-color,white);border:1px solid var(--divider-color,#888);border-radius:6px}
+        fieldset{border:1px solid var(--divider-color,#888);border-radius:6px;display:flex;flex-wrap:wrap;gap:12px;padding:12px}
+        .check{display:flex;align-items:center;gap:8px} input[type=checkbox]{width:18px;height:18px;accent-color:var(--primary-color,#00642f)}
+        small{color:var(--secondary-text-color)}
+      </style>
+      <div class="form">
+        <label>Rungtynių sąrašo sensorius<input data-key="entity" list="sensors" value="${escapeHtml(cfg.entity || "")}" placeholder="sensor.zalgiris_rungtyniu_sarasas" required></label>
+        <datalist id="sensors">${(this._sensors || []).map(id => `<option value="${escapeHtml(id)}"></option>`).join("")}</datalist>
+        <label>Artėjančių rungtynių skaičius<input data-key="count" type="number" min="1" max="20" step="1" value="${escapeHtml(cfg.count ?? 5)}" required></label>
+        <fieldset><legend>Lygos</legend>${[["all","Visos"],["eurolyga","Eurolyga"],["lkl","LKL"],["kmt","KMT"]].map(([id,label]) => `<label class="check"><input type="checkbox" data-key="league" value="${id}" ${leagues.includes(id) ? "checked" : ""}>${label}</label>`).join("")}</fieldset>
+        ${select("venue", "Rungtynių vieta", [["all","Visos"],["home","Namie"],["away","Išvykoje"]], cfg.venue ?? "all")}
+        ${select("accent", "Ką išryškinti?", [["time","Laiką"],["date","Datą"]], cfg.accent ?? "time")}
+        <label class="check"><input data-key="show_filters" type="checkbox" ${cfg.show_filters === true ? "checked" : ""}>Rodyti filtrų mygtukus</label>
+        <label class="check"><input data-key="show_league" type="checkbox" ${cfg.show_league !== false ? "checked" : ""}>Rodyti lygos pavadinimą virš pagrindinių rungtynių</label>
+        <small>Pakeitimus išsaugokite paspaudę HA mygtuką „Išsaugoti“.</small>
+      </div>`;
+  }
+}
+
+if (!customElements.get("zalgiris-card-editor")) {
+  customElements.define("zalgiris-card-editor", ZalgirisCardEditor);
 }
 
 if (!customElements.get("zalgiris-card")) {
