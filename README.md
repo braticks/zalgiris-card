@@ -1,3 +1,9 @@
+> **Bendras kortų paketas:** šią kortą dabar galima įdiegti kartu su kitomis per [Braticks Cards](https://github.com/braticks/braticks-cards). HACS pridėkite `https://github.com/braticks/braticks-cards`, kategorija **Dashboard**. [Diegimo ir perėjimo instrukcijos](https://github.com/braticks/braticks-cards#perėjimas-iš-senų-kortų). Kortos YAML tipas ir nustatymai lieka tie patys. Prieš pereidami pašalinkite seną atskirą kortos paketą ir jo dashboard resursą.
+>
+> **English:** this card is now included in [Braticks Cards](https://github.com/braticks/braticks-cards). Add the shared repository to HACS as **Dashboard** and follow its migration guide. Existing card types and configuration remain compatible. Remove the old standalone card package/resource before switching.
+
+> Toliau pateikta ankstesnė atskiros kortos dokumentacija. Diegdami bendrą paketą naudokite jo README instrukcijas.
+
 # Žalgiris Card
 
 Home Assistant „Lovelace“ korta, skirta [Žalgiris Matches](https://github.com/braticks/zalgiris_matches) integracijai.
