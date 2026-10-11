@@ -1,0 +1,14 @@
+{
+  "title": "EuroLeague turnyrinė lentelė",
+  "config": {
+    "step": {
+      "user": {
+        "title": "EuroLeague turnyrinė lentelė",
+        "description": "Pridėti dabartinę EuroLeague turnyrinę lentelę. Sezonas ir turas nustatomi automatiškai."
+      }
+    },
+    "abort": {
+      "already_configured": "EuroLeague turnyrinė lentelė jau sukonfigūruota."
+    }
+  }
+}

@@ -1,0 +1,654 @@
+/**
+ * zalgiris-card v2.0.4
+ * Veikia tik su sensor.zalgiris_rungtyniu_sarasas
+ *
+ * Konfigūracija:
+ *   type: custom:zalgiris-card
+ *   entity: sensor.zalgiris_rungtyniu_sarasas
+ *   count: 5
+ *   show_league: true
+ */
+
+const CARD_VERSION = "2.0.4";
+const ZALGIRIS_RE = /žalgiris|zalgiris/i;
+
+function leagueKey(value) {
+  const key = String(value ?? "").trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  const aliases = {
+    eurolyga: "eurolyga", euroleague: "eurolyga",
+    lkl: "lkl", "lietuvos krepsinio lyga": "lkl",
+    kmt: "kmt", "mindaugo taure": "kmt", "karaliaus mindaugo taure": "kmt",
+  };
+  return aliases[key] || key;
+}
+
+function filterGames(games, leagues, venue) {
+  return games.filter(g => g && typeof g === "object" &&
+    (leagues.includes("all") || leagues.includes(leagueKey(g.league))) &&
+    (venue === "all" || (venue === "home"
+      ? ZALGIRIS_RE.test(g.home || "") && !ZALGIRIS_RE.test(g.away || "")
+      : ZALGIRIS_RE.test(g.away || "") && !ZALGIRIS_RE.test(g.home || ""))));
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function safeUrl(value) {
+  if (!value) return "";
+  try {
+    const url = new URL(String(value), window.location.origin);
+    return ["http:", "https:"].includes(url.protocol) ? escapeHtml(url.href) : "";
+  } catch (_err) {
+    return "";
+  }
+}
+
+function safeGame(game = {}) {
+  const safe = {};
+  for (const [key, value] of Object.entries(game)) {
+    safe[key] = typeof value === "string" ? escapeHtml(value) : value;
+  }
+  safe.home_logo = safeUrl(game.home_logo);
+  safe.away_logo = safeUrl(game.away_logo);
+  safe.info_url = safeUrl(game.info_url);
+  return safe;
+}
+
+// ─── Datos / laiko pagalbiniai ───
+
+function sameDay(a, b) {
+  return a.getDate() === b.getDate() &&
+    a.getMonth() === b.getMonth() &&
+    a.getFullYear() === b.getFullYear();
+}
+
+function relDay(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const today = new Date();
+  const tom = new Date(); tom.setDate(today.getDate() + 1);
+  if (sameDay(d, today)) return "Šiandien";
+  if (sameDay(d, tom))   return "Rytoj";
+  return d.toLocaleDateString("lt", { weekday: "long", month: "long", day: "numeric" });
+}
+
+function fmtDateShort(iso) {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const today = new Date();
+  const tom = new Date(); tom.setDate(today.getDate() + 1);
+  if (sameDay(d, today)) return "Šiandien";
+  if (sameDay(d, tom))   return "Rytoj";
+  return d.toLocaleDateString("lt", { weekday: "short", month: "short", day: "numeric" });
+}
+
+function fmtTime(iso) {
+  if (!iso) return "";
+  return new Date(iso).toLocaleTimeString("lt", { hour: "2-digit", minute: "2-digit", hour12: false });
+}
+
+function kickoffIn(iso) {
+  if (!iso) return "";
+  const diff = (new Date(iso) - new Date()) / 1000;
+  if (diff < 0)     return "vyksta";
+  if (diff < 3600)  return `po ${Math.ceil(diff / 60)} min.`;
+  if (diff < 86400) return `po ${Math.floor(diff / 3600)} val.`;
+  return `po ${Math.floor(diff / 86400)} d.`;
+}
+
+function leagueColor(league) {
+  if (!league) return { bg: "#44444425", text: "#888" };
+  const l = league.toLowerCase();
+  if (l.includes("eurolyga") || l.includes("euroleague")) return { bg: "#1a3a6b30", text: "#2a5aaa" };
+  if (l.includes("lkl"))    return { bg: "#00642f30", text: "#00642f" };
+  if (l.includes("kmt") || l.includes("mindaugo")) return { bg: "#8B000030", text: "#8B0000" };
+  return { bg: "#44444425", text: "#777" };
+}
+
+// ─── Žaidimo būsenos nustatymas ───
+
+function gameState(g) {
+  if (g.is_live === true) return "IN";
+  if (g.status === "finished") return "POST";
+  const now = Date.now();
+  const start = g.start ? new Date(g.start).getTime() : null;
+  if (!start) return "PRE";
+  if (start > now) return "PRE";
+  // Baigtas: praėjo >3 val. arba yra rezultatas
+  if (start < now - 3 * 3600 * 1000) return "POST";
+  return "IN"; // prasidėjo, bet nėra rezultato – laikome live
+}
+
+// ─── CSS ───
+
+const STYLES = `
+  :host { display: block; }
+
+  ha-card {
+    padding: 14px 16px 12px;
+    font-family: var(--primary-font-family);
+    overflow: hidden;
+    position: relative;
+    border-radius: var(--ha-card-border-radius, 10px);
+  }
+
+  .bg-logo { position: absolute; opacity: 0.07; width: 55%; top: -10%; z-index: 0; pointer-events: none; }
+  .bg-logo.left  { left: -15%; }
+  .bg-logo.right { right: -15%; }
+
+  .card-title {
+    text-align: center; font-size: 0.95em; font-weight: 500;
+    opacity: 0.65; margin-bottom: 10px; position: relative; z-index: 1;
+  }
+
+  .live-badge {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: #c0392b; color: #fff; border-radius: 20px;
+    font-size: 0.7em; font-weight: 700; padding: 2px 9px;
+    margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.05em;
+    position: relative; z-index: 1;
+    animation: livepulse 1.5s infinite;
+  }
+  .live-badge::before {
+    content: ""; width: 7px; height: 7px; border-radius: 50%;
+    background: #fff; display: inline-block;
+  }
+  @keyframes livepulse { 0%,100% { opacity: 1; } 50% { opacity: 0.75; } }
+
+  .center-top {
+    display: flex; flex-direction: column; align-items: center;
+    position: relative; z-index: 1; margin-bottom: 4px;
+  }
+
+  .teams-row {
+    display: flex; justify-content: space-between; align-items: center;
+    position: relative; z-index: 1;
+  }
+  .team {
+    display: flex; flex-direction: column; align-items: center;
+    width: 36%; text-align: center; text-decoration: none; color: inherit;
+  }
+  .team img.main-logo { max-height: 80px; max-width: 80px; object-fit: contain; }
+  .team-name  { font-size: 1em; margin-top: 6px; line-height: 1.2; }
+
+  .game-center {
+    display: flex; flex-direction: column; align-items: center;
+    justify-content: center; width: 28%; position: relative; z-index: 1;
+  }
+  .game-weekday  { font-size: 1.4em; font-weight: 600; text-align: center; line-height: 1.1; }
+  .game-dateextra { font-size: 1em; opacity: 0.65; margin-top: 2px; }
+  .game-time     { font-size: 2em; font-weight: 700; line-height: 1; margin-top: 6px; }
+  .game-kickoff  { font-size: 0.8em; opacity: 0.55; margin-top: 4px; }
+
+  .score { font-size: 2.8em; font-weight: 700; text-align: center; line-height: 1; margin-top: 4px; }
+  .live-period { font-size: 1.1em; font-weight: 600; text-align: center; opacity: 0.8; }
+
+  .post-result { font-size: 1em; opacity: 0.65; text-align: center; }
+  .post-won { font-size: 0.95em; margin-top: 6px; text-align: center; }
+
+  .divider { height: 1px; background: var(--divider-color, rgba(128,128,128,0.25)); margin: 12px 0; position: relative; z-index: 1; }
+
+  .info-row {
+    display: flex; justify-content: space-between; align-items: center;
+    font-size: 0.9em; margin: 3px 0; position: relative; z-index: 1;
+  }
+  .info-muted { opacity: 0.65; }
+
+  .schedule-title {
+    font-size: 0.85em; font-weight: 500; opacity: 0.55;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    margin: 4px 0 8px; position: relative; z-index: 1;
+  }
+
+  .game-row {
+    display: flex; align-items: center; padding: 7px 0;
+    border-bottom: 1px solid var(--divider-color, rgba(128,128,128,0.15));
+    gap: 10px; text-decoration: none; color: inherit;
+    position: relative; z-index: 1;
+  }
+  .game-row:last-child { border-bottom: none; }
+
+  .logos { display: flex; align-items: center; gap: 2px; width: 70px; justify-content: center; flex-shrink: 0; }
+  .s-logo { width: 26px; height: 26px; object-fit: contain; border-radius: 50%; background: var(--card-background-color, #fff); border: 1px solid var(--divider-color, rgba(0,0,0,0.08)); padding: 2px; }
+  .s-placeholder { width: 26px; height: 26px; border-radius: 50%; background: var(--secondary-background-color, #f0f0f0); border: 1px solid var(--divider-color, rgba(0,0,0,0.08)); display: flex; align-items: center; justify-content: center; font-size: 7px; font-weight: 600; opacity: 0.55; flex-shrink: 0; }
+  .vs-sep { font-size: 8px; opacity: 0.3; flex-shrink: 0; }
+
+  .s-info { flex: 1; min-width: 0; }
+  .s-teams { font-size: 1em; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3; }
+  .s-meta { display: flex; align-items: center; gap: 5px; margin-top: 3px; }
+  .s-badge { font-size: 10px; font-weight: 500; padding: 1px 6px; border-radius: 3px; flex-shrink: 0; }
+  .s-tv { font-size: 11px; opacity: 0.85; font-weight: 600; }
+
+  .s-time { text-align: right; flex-shrink: 0; }
+  .s-time-val { font-size: 1.2em; font-weight: 700; line-height: 1; }
+  .s-date-val { font-size: 0.82em; opacity: 0.55; margin-top: 2px; }
+
+  .s-score { font-size: 0.95em; font-weight: 700; white-space: nowrap; flex-shrink: 0; text-align: right; }
+
+  .empty { text-align: center; padding: 14px 0; opacity: 0.45; font-size: 0.9em; }
+  .filters { position: relative; z-index: 1; margin-bottom: 12px; }
+  .filter-row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+  .filter-row button { font: inherit; font-size: 0.8em; color: var(--primary-text-color); background: var(--card-background-color); border: 1px solid var(--divider-color, #888); border-radius: 14px; padding: 5px 10px; cursor: pointer; }
+  .filter-row button[aria-pressed="true"] { background: var(--primary-color, #00642f); color: var(--text-primary-color, white); }
+  .filter-row button:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+  .accent-date .game-weekday { font-size: 1.55em; font-weight: 700; }
+  .accent-date .game-time { font-size: 1.15em; opacity: 0.75; }
+  .accent-date .s-time { max-width: 38%; }
+  .accent-date .s-time-val { font-size: 1em; line-height: 1.2; }
+`;
+
+// ─── Pagalbiniai HTML ───
+
+function bgLogos(l1, l2) {
+  return `
+    ${l1 ? `<img class="bg-logo left"  src="${l1}">` : ""}
+    ${l2 ? `<img class="bg-logo right" src="${l2}">` : ""}`;
+}
+
+function mainLogo(src, name) {
+  if (src) return `<img class="main-logo" src="${src}" alt="${name || ""}" onerror="this.style.opacity='0.15'">`;
+  return `<div style="width:70px;height:70px;opacity:0.15;display:flex;align-items:center;justify-content:center;font-size:1.2em">${name?.[0] || "?"}</div>`;
+}
+
+function sLogoEl(src, abbr) {
+  if (src) return `<img class="s-logo" src="${src}" alt="${abbr || ""}" onerror="this.style.opacity='0.15'">`;
+  return `<div class="s-placeholder">${(abbr || "?").substring(0, 3)}</div>`;
+}
+
+// ─── Kortos klasė ───
+
+class ZalgirisCard extends HTMLElement {
+
+  static getConfigElement() {
+    return document.createElement("zalgiris-card-editor");
+  }
+
+  static getStubConfig(hass) {
+    const entity = Object.keys(hass?.states || {}).find(id => id.startsWith("sensor.") &&
+      Array.isArray(hass.states[id].attributes?.upcoming));
+    return { entity: entity || "sensor.zalgiris_rungtyniu_sarasas", count: 5,
+      league: "all", venue: "all", accent: "time", show_filters: false, show_league: true };
+  }
+
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this.shadowRoot.addEventListener("click", event => {
+      const button = event.target.closest?.("button[data-filter]");
+      if (!button || !this._config?.show_filters) return;
+      const { filter, value } = button.dataset;
+      if (filter === "league") this._selectedLeague = [value];
+      if (filter === "venue") this._selectedVenue = value;
+      this._render();
+    });
+  }
+
+  setConfig(config) {
+    if (!config.entity) throw new Error("entity yra privalomas");
+    const leagues = (Array.isArray(config.league) ? config.league : [config.league ?? "all"]).map(leagueKey);
+    if (!leagues.length || leagues.some(l => !["all", "eurolyga", "lkl", "kmt"].includes(l))) {
+      throw new Error("league: all, eurolyga, lkl, kmt arba jų sąrašas");
+    }
+    const venue = config.venue ?? "all";
+    const accent = config.accent ?? "time";
+    if (!["all", "home", "away"].includes(venue)) throw new Error("venue: all, home arba away");
+    if (!["time", "date"].includes(accent)) throw new Error("accent: time arba date");
+    this._config = {
+      ...config,
+      count: Math.max(1, Math.min(20, Number.parseInt(config.count ?? 5, 10) || 5)),
+      show_league: config.show_league !== false,
+      show_filters: config.show_filters === true,
+      league: leagues, venue, accent,
+    };
+    this._selectedLeague = [...leagues];
+    this._selectedVenue = venue;
+    this._render();
+  }
+
+  _buildFilters() {
+    const row = (kind, label, options, selected) => `<div class="filter-row" role="group" aria-label="${label}">${options.map(([value, text]) =>
+      `<button type="button" data-filter="${kind}" data-value="${value}" aria-pressed="${selected.includes(value)}">${text}</button>`).join("")}</div>`;
+    return `<div class="filters">${row("league", "Lyga", [["all", "Visos lygos"], ["eurolyga", "Eurolyga"], ["lkl", "LKL"], ["kmt", "KMT"]], this._selectedLeague)}${row("venue", "Rungtynių vieta", [["all", "Visos"], ["home", "Namie"], ["away", "Išvykoje"]], [this._selectedVenue])}</div>`;
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    this._render();
+  }
+
+  getCardSize() { return 7; }
+
+  // Nustatome pusę: home visada kairėje
+  _sides(g) {
+    const home = { name: g.home || "?", logo: g.home_logo || "" };
+    const away = { name: g.away || "?", logo: g.away_logo || "" };
+    // Žalgiris namie → Žalgiris kairėje, priešininkas dešinėje
+    // Žalgiris svečiuose → priešininkas (namų) kairėje
+    const zalHome = ZALGIRIS_RE.test(g.home || "");
+    if (zalHome) {
+      return {
+        left:  { ...home, score: g.score_home },
+        right: { ...away, score: g.score_away },
+        zalLeft: true,
+      };
+    } else {
+      return {
+        left:  { ...home, score: g.score_home },
+        right: { ...away, score: g.score_away },
+        zalLeft: false,
+      };
+    }
+  }
+
+  _buildPRE(g) {
+    const { left, right } = this._sides(g);
+    const cfg = this._config;
+    const weekday = cfg.accent === "date" ? fmtDateShort(g.start) : relDay(g.start);
+    const d = g.start ? new Date(g.start) : null;
+    const today = new Date();
+    const tom = new Date(); tom.setDate(today.getDate() + 1);
+    const dateExtra = d && !sameDay(d, today) && !sameDay(d, tom)
+      ? d.toLocaleDateString("lt", { month: "short", day: "2-digit" }) : "";
+    const time = g.start ? fmtTime(g.start) : "";
+    const kof = g.start ? kickoffIn(g.start) : "";
+    const title = cfg.show_league && g.league ? `<div class="card-title">${g.league}</div>` : "";
+
+    return `
+      ${bgLogos(left.logo, right.logo)}
+      ${title}
+      <div class="teams-row">
+        <a class="team" ${g.info_url ? `href="${g.info_url}" target="_blank" rel="noopener noreferrer"` : ""}>
+          ${mainLogo(left.logo, left.name)}
+          <div class="team-name">${left.name}</div>
+        </a>
+        <div class="game-center">
+          <div class="game-weekday">${weekday}</div>
+          ${dateExtra && cfg.accent !== "date" ? `<div class="game-dateextra">${dateExtra}</div>` : ""}
+          <div class="game-time">${time}</div>
+          ${kof ? `<div class="game-kickoff">${kof}</div>` : ""}
+        </div>
+        <a class="team" ${g.info_url ? `href="${g.info_url}" target="_blank" rel="noopener noreferrer"` : ""}>
+          ${mainLogo(right.logo, right.name)}
+          <div class="team-name">${right.name}</div>
+        </a>
+      </div>
+      ${g.tv ? `<div class="info-row" style="justify-content:center;margin-top:8px;position:relative;z-index:1"><span class="info-muted">📺 ${g.tv}</span></div>` : ""}`;
+  }
+
+  _buildIN(g) {
+    const { left, right } = this._sides(g);
+    const cfg = this._config;
+    const period = [g.live_period, g.live_clock].filter(Boolean).join(" · ") || "Laukiama duomenų";
+    const title = cfg.show_league && g.league ? `<div class="card-title">${g.league}</div>` : "";
+
+    return `
+      ${bgLogos(left.logo, right.logo)}
+      <div class="center-top">
+        <div class="live-badge">${g.is_live === true ? "Live" : "Prasidėjo pagal tvarkaraštį"}</div>
+      </div>
+      ${title}
+      <div class="teams-row">
+        <div style="display:flex;flex-direction:column;align-items:center;width:36%">
+          <a class="team" ${g.info_url ? `href="${g.info_url}" target="_blank" rel="noopener noreferrer"` : ""}>
+            ${mainLogo(left.logo, left.name)}
+            <div class="team-name">${left.name}</div>
+          </a>
+          <div class="score">${left.score ?? "-"}</div>
+        </div>
+        <div class="game-center">
+          <div class="live-period">${period}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;width:36%">
+          <a class="team" ${g.info_url ? `href="${g.info_url}" target="_blank" rel="noopener noreferrer"` : ""}>
+            ${mainLogo(right.logo, right.name)}
+            <div class="team-name">${right.name}</div>
+          </a>
+          <div class="score">${right.score ?? "-"}</div>
+        </div>
+      </div>
+      ${g.tv ? `<div class="info-row" style="justify-content:center;margin-top:8px;position:relative;z-index:1"><span class="info-muted">📺 ${g.tv}</span></div>` : ""}`;
+  }
+
+  _buildPOST(g) {
+    const { left, right, zalLeft } = this._sides(g);
+    const cfg = this._config;
+    const lScore = left.score ?? "-";
+    const rScore = right.score ?? "-";
+    // Žalgiris laimėjo?
+    let won = "";
+    if (left.score != null && right.score != null) {
+      const zalScore = zalLeft ? left.score : right.score;
+      const oppScore = zalLeft ? right.score : left.score;
+      if (zalScore > oppScore) won = "✓ Laimėjo";
+      else if (zalScore < oppScore) won = "✗ Pralaimėjo";
+    }
+    const title = cfg.show_league && g.league ? `<div class="card-title">${g.league}</div>` : "";
+
+    return `
+      ${bgLogos(left.logo, right.logo)}
+      ${title}
+      <div class="teams-row">
+        <div style="display:flex;flex-direction:column;align-items:center;width:36%">
+          <a class="team" ${g.info_url ? `href="${g.info_url}" target="_blank" rel="noopener noreferrer"` : ""}>
+            ${mainLogo(left.logo, left.name)}
+            <div class="team-name">${left.name}</div>
+          </a>
+          <div class="score">${lScore}</div>
+        </div>
+        <div class="game-center">
+          <div class="post-result">${g.status === "finished" ? "Baigta" : "Praėjusios rungtynės"}</div>
+          ${won ? `<div class="post-won">${won}</div>` : ""}
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:center;width:36%">
+          <a class="team" ${g.info_url ? `href="${g.info_url}" target="_blank" rel="noopener noreferrer"` : ""}>
+            ${mainLogo(right.logo, right.name)}
+            <div class="team-name">${right.name}</div>
+          </a>
+          <div class="score">${rScore}</div>
+        </div>
+      </div>`;
+  }
+
+  _buildSchedule(games) {
+    const count = this._config.count || 5;
+    const list = games.slice(0, count);
+    if (list.length === 0) return `<div class="empty">Artėjančių rungtynių nerasta</div>`;
+
+    let html = `<div class="schedule-title">Artėjančios rungtynės</div>`;
+
+    for (const g of list) {
+      const homeLogo = g.home_logo || "";
+      const awayLogo = g.away_logo || "";
+      const homeAbbr = (g.home || "?").split(" ").map(w => w[0]).join("").substring(0, 3).toUpperCase();
+      const awayAbbr = (g.away || "?").split(" ").map(w => w[0]).join("").substring(0, 3).toUpperCase();
+      const badge = leagueColor(g.league);
+      const url = g.info_url || "";
+      const tv = g.tv || "";
+      const state = gameState(g);
+
+      // Rezultatai jei live arba baigta
+      let scoreEl = "";
+      if (state === "IN") {
+        scoreEl = `<div class="s-score" style="color:#c0392b">${g.score_home ?? "-"} : ${g.score_away ?? "-"}</div>`;
+      } else if (state === "POST" && g.score_home != null) {
+        scoreEl = `<div class="s-score">${g.score_home} : ${g.score_away}</div>`;
+      }
+
+      html += `
+        <a class="game-row" ${url ? `href="${url}" target="_blank" rel="noopener noreferrer"` : ""}>
+          <div class="logos">
+            ${sLogoEl(homeLogo, homeAbbr)}
+            <span class="vs-sep">—</span>
+            ${sLogoEl(awayLogo, awayAbbr)}
+          </div>
+          <div class="s-info">
+            <div class="s-teams">${g.home || "?"} — ${g.away || "?"}</div>
+            <div class="s-meta">
+              ${g.league ? `<span class="s-badge" style="background:${badge.bg};color:${badge.text}">${g.league}</span>` : ""}
+              ${tv ? `<span class="s-tv">📺 ${tv}</span>` : ""}
+            </div>
+          </div>
+          ${scoreEl || `<div class="s-time">
+            <div class="s-time-val">${this._config.accent === "date" ? fmtDateShort(g.start) : fmtTime(g.start)}</div>
+            <div class="s-date-val">${this._config.accent === "date" ? fmtTime(g.start) : fmtDateShort(g.start)}</div>
+          </div>`}
+        </a>`;
+    }
+
+    return html;
+  }
+
+  _render() {
+    const hass = this._hass;
+    const cfg  = this._config;
+    if (!hass || !cfg) return;
+
+    const stateObj = hass.states[cfg.entity];
+    if (!stateObj) {
+      this.shadowRoot.innerHTML = `<style>${STYLES}</style><ha-card><div class="empty">Sensorius nerastas: ${cfg.entity}</div></ha-card>`;
+      return;
+    }
+
+    const filtered = values => filterGames(Array.isArray(values) ? values : [], this._selectedLeague, this._selectedVenue).map(safeGame);
+    const upcoming = filtered(stateObj.attributes.upcoming);
+    const finished = filtered(stateObj.attributes.finished);
+
+    // Nustatome pagrindinį žaidimą rodymui
+    // 1. Live žaidimas upcoming arba finished sąraše
+    let mainGame = upcoming.find(g => gameState(g) === "IN")
+      || finished.find(g => gameState(g) === "IN");
+
+    // 2. Jei nėra live – pirmas upcoming
+    if (!mainGame) mainGame = upcoming[0];
+
+    // 3. Jei nėra upcoming – paskutinis baigtas
+    if (!mainGame) mainGame = finished[0];
+
+    let mainHTML = "";
+    if (mainGame) {
+      const state = gameState(mainGame);
+      if (state === "PRE")  mainHTML = this._buildPRE(mainGame);
+      else if (state === "IN")   mainHTML = this._buildIN(mainGame);
+      else if (state === "POST") mainHTML = this._buildPOST(mainGame);
+    } else {
+      mainHTML = `<div class="empty" style="position:relative;z-index:1">Rungtynių nerasta</div>`;
+    }
+
+    // Sąrašas: upcoming be rodomo žaidimo
+    const schedGames = mainGame
+      ? upcoming.filter(g => g.game_id !== mainGame.game_id)
+      : upcoming;
+    const schedHTML = `<div class="divider"></div>${this._buildSchedule(schedGames)}`;
+
+    this.shadowRoot.innerHTML = `
+      <style>${STYLES}</style>
+      <ha-card class="accent-${cfg.accent}">
+        ${cfg.show_filters ? this._buildFilters() : ""}
+        ${mainHTML}
+        ${schedHTML}
+      </ha-card>`;
+  }
+}
+
+class ZalgirisCardEditor extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this.shadowRoot.addEventListener("change", event => this._changed(event));
+  }
+
+  setConfig(config) {
+    this._config = { ...config };
+    this._render();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    const sensors = Object.keys(hass?.states || {}).filter(id => id.startsWith("sensor.")).sort();
+    const signature = JSON.stringify(sensors);
+    if (signature !== this._sensorsSignature) {
+      this._sensorsSignature = signature;
+      this._sensors = sensors;
+      this._render();
+    }
+  }
+
+  _changed(event) {
+    const input = event.target;
+    const key = input.dataset?.key;
+    if (!this._config || !["entity", "count", "league", "venue", "accent", "show_filters", "show_league"].includes(key)) return;
+    let value = input.type === "checkbox" ? input.checked : input.value;
+    if (key === "count") {
+      value = Number(value);
+      if (!Number.isInteger(value) || value < 1 || value > 20) { input.reportValidity(); return; }
+    }
+    if (key === "entity" && !value.trim()) return;
+    if (key === "league") {
+      const current = this._config.league ?? "all";
+      let leagues = (Array.isArray(current) ? current : [current]).map(leagueKey);
+      const item = input.value;
+      if (item === "all") leagues = ["all"];
+      else {
+        leagues = leagues.filter(l => l !== "all" && l !== item);
+        if (input.checked) leagues.push(item);
+      }
+      value = leagues.length ? leagues : ["all"];
+    }
+    this._config = { ...this._config, [key]: value };
+    this.dispatchEvent(new CustomEvent("config-changed", {
+      detail: { config: { ...this._config } }, bubbles: true, composed: true,
+    }));
+    if (key === "league") this._render();
+  }
+
+  _render() {
+    if (!this._config) return;
+    const cfg = this._config;
+    const leagues = (Array.isArray(cfg.league) ? cfg.league : [cfg.league ?? "all"]).map(leagueKey);
+    const select = (key, label, options, value) => `<label>${label}<select data-key="${key}">${options.map(([id, title]) => `<option value="${id}" ${id === value ? "selected" : ""}>${title}</option>`).join("")}</select></label>`;
+    this.shadowRoot.innerHTML = `
+      <style>
+        :host{display:block;color:var(--primary-text-color);font-family:var(--primary-font-family, sans-serif)}
+        .form{display:grid;gap:16px;padding:8px 0} label{display:grid;gap:6px;font-size:14px}
+        input:not([type=checkbox]),select{box-sizing:border-box;width:100%;padding:10px;font:inherit;color:var(--primary-text-color);background:var(--card-background-color,white);border:1px solid var(--divider-color,#888);border-radius:6px}
+        fieldset{border:1px solid var(--divider-color,#888);border-radius:6px;display:flex;flex-wrap:wrap;gap:12px;padding:12px}
+        .check{display:flex;align-items:center;gap:8px} input[type=checkbox]{width:18px;height:18px;accent-color:var(--primary-color,#00642f)}
+        small{color:var(--secondary-text-color)}
+      </style>
+      <div class="form">
+        <label>Rungtynių sąrašo sensorius<input data-key="entity" list="sensors" value="${escapeHtml(cfg.entity || "")}" placeholder="sensor.zalgiris_rungtyniu_sarasas" required></label>
+        <datalist id="sensors">${(this._sensors || []).map(id => `<option value="${escapeHtml(id)}"></option>`).join("")}</datalist>
+        <label>Artėjančių rungtynių skaičius<input data-key="count" type="number" min="1" max="20" step="1" value="${escapeHtml(cfg.count ?? 5)}" required></label>
+        <fieldset><legend>Lygos</legend>${[["all","Visos"],["eurolyga","Eurolyga"],["lkl","LKL"],["kmt","KMT"]].map(([id,label]) => `<label class="check"><input type="checkbox" data-key="league" value="${id}" ${leagues.includes(id) ? "checked" : ""}>${label}</label>`).join("")}</fieldset>
+        ${select("venue", "Rungtynių vieta", [["all","Visos"],["home","Namie"],["away","Išvykoje"]], cfg.venue ?? "all")}
+        ${select("accent", "Ką išryškinti?", [["time","Laiką"],["date","Datą"]], cfg.accent ?? "time")}
+        <label class="check"><input data-key="show_filters" type="checkbox" ${cfg.show_filters === true ? "checked" : ""}>Rodyti filtrų mygtukus</label>
+        <label class="check"><input data-key="show_league" type="checkbox" ${cfg.show_league !== false ? "checked" : ""}>Rodyti lygos pavadinimą virš pagrindinių rungtynių</label>
+        <small>Pakeitimus išsaugokite paspaudę HA mygtuką „Išsaugoti“.</small>
+      </div>`;
+  }
+}
+
+if (!customElements.get("zalgiris-card-editor")) {
+  customElements.define("zalgiris-card-editor", ZalgirisCardEditor);
+}
+
+if (!customElements.get("zalgiris-card")) {
+  customElements.define("zalgiris-card", ZalgirisCard);
+}
+
+window.customCards = window.customCards || [];
+window.customCards.push({
+  type: "zalgiris-card",
+  name: "Žalgiris Card",
+  preview: false,
+  description: "Žalgirio rungtynės + artėjančių sąrašas",
+});
+
+console.info(`%c ZALGIRIS-CARD ${CARD_VERSION} įdiegta`, "color: #00642F; font-weight: bold");

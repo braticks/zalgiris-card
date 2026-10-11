@@ -1,0 +1,26 @@
+[
+  {
+    "repository": "braticks/ha-lithuanian-date-card",
+    "commit": "5f083fee7468b52e437ae689fbee98327cc19502"
+  },
+  {
+    "repository": "braticks/zalgiris-card",
+    "commit": "e6b7ce2710ff669b669854bfdce79c25cb7f1f3b"
+  },
+  {
+    "repository": "braticks/euroleague-standings",
+    "commit": "494946bab42352304ef59079c45a52d3be88730d"
+  },
+  {
+    "repository": "braticks/lkl-standings",
+    "commit": "7c8174e924eeee8b8f543ac8dcc96465939e4bb8"
+  },
+  {
+    "repository": "braticks/ha-month-calendar-card",
+    "commit": "9fa83a7af6bd78c58b9011e270e3d55b9728ea9d"
+  },
+  {
+    "repository": "braticks/ha-threedy-card",
+    "commit": "9a2002403da7405eaf280830f5c20b69a308f1b3"
+  }
+]

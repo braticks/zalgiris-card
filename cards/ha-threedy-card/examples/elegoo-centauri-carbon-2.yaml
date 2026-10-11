@@ -1,0 +1,60 @@
+type: conditional
+grid_options:
+  columns: 12
+  rows: auto
+conditions:
+  - condition: state
+    entity: binary_sensor.centauri_carbon_2_sdcp_status
+    state: "on"
+card:
+  type: custom:threedy-card
+  base_entity: ""
+  name: Elegoo Centauri Carbon 2
+  printer_type: CoreXY
+  theme: Default
+  font: Roboto
+  scale: 0.9
+  always_show: true
+  round_temperature: true
+  show_seconds: false
+  temperature_unit: C
+  use_24hr: true
+  camera_entity: camera.centauri_carbon_2_chamber_camera
+  monitored:
+    - Status
+    - ETA
+    - Remaining
+    - CurrentLayer
+    - TotalLayers
+    - Hotend
+    - Bed
+    - Chamber
+  sensors:
+    Progress:
+      entity: sensor.centauri_carbon_2_percent_complete
+    Status:
+      name: Būsena
+      entity: sensor.centauri_carbon_2_current_status
+    ETA:
+      name: Pabaiga
+      entity: sensor.centauri_carbon_2_end_time
+    Remaining:
+      name: Liko
+      entity: sensor.centauri_carbon_2_remaining_print_time
+      unit: min
+    CurrentLayer:
+      name: Sluoksnis
+      entity: sensor.centauri_carbon_2_current_layer
+    TotalLayers:
+      name: Iš viso
+      entity: sensor.centauri_carbon_2_total_layers
+    Hotend:
+      name: Antgalis
+      entity: sensor.centauri_carbon_2_nozzle_temperature
+    Bed:
+      name: Stalas
+      entity: sensor.centauri_carbon_2_bed_temperature
+    Chamber:
+      name: Kamera · °C
+      entity: sensor.centauri_carbon_2_box_temp
+      precision: 0

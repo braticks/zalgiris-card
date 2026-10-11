@@ -1,0 +1,14 @@
+{
+  "title": "LKL Standings",
+  "config": {
+    "step": {
+      "user": {
+        "title": "LKL Standings",
+        "description": "Add the current LKL standings from lkl.lt."
+      }
+    },
+    "abort": {
+      "already_configured": "LKL Standings is already configured."
+    }
+  }
+}

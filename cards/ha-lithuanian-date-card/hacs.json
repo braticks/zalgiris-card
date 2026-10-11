@@ -1,0 +1,9 @@
+{
+  "name": "Lietuviškas Kalendorius",
+  "content_in_root": true,
+  "filename": "ha-lithuanian-date-card.js",
+  "icon": "source.png",
+  "render_readme": true,
+  "hide_default_branch": true,
+  "version": "1.0.1"
+}

@@ -1,0 +1,14 @@
+{
+  "title": "EuroLeague Standings",
+  "config": {
+    "step": {
+      "user": {
+        "title": "EuroLeague Standings",
+        "description": "Add the current EuroLeague standings. The season and round are detected automatically."
+      }
+    },
+    "abort": {
+      "already_configured": "EuroLeague Standings is already configured."
+    }
+  }
+}

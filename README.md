@@ -1,99 +1,42 @@
-# Žalgiris Card
+# Braticks Cards
 
-Home Assistant „Lovelace“ korta, skirta [Žalgiris Matches](https://github.com/braticks/zalgiris_matches) integracijai.
+Bendras Home Assistant kortų paketas. Vienas HACS adresas dabartinėms ir būsimoms kortoms.
 
-Rodo artimiausias rungtynes, varžovų logotipus, turnyrą, transliuotoją, rungtynių pradžios laiką, tiesioginį rezultatą ir artėjančių rungtynių sąrašą.
+## Kortos
 
-![Žalgiris Card Home Assistant korta](images/zalgiris-card.png)
-
-## Vizualus redaktorius (2.0.4)
-
-Dashboard → Redaguoti → kortos „Redaguoti“. Formoje galite pasirinkti sensorių (paieška pagal entity ID), rungtynių skaičių, vieną ar kelias lygas, namų / išvykos filtrą, datos / laiko akcentą ir rodymo jungiklius. Spauskite **Išsaugoti** — parinktys išliks kortos konfigūracijoje ir perkrovus puslapį. YAML tebėra palaikomas.
-
-Jei forma nerodoma, atnaujinkite kortą per HACS ir perkraukite naršyklę išvalydami podėlį. Redaktoriaus parinktys išsaugomos HA; pačios kortos filtrų mygtukai tebėra laikini.
-
-English: the visual card editor supports the sensor, game count, multiple leagues, venue, date/time emphasis and display toggles. Save through Home Assistant to persist settings. YAML and existing extra configuration fields remain supported.
-
-## Filtrai ir datos akcentas (2.0.3)
-
-Pasiūlymas: [juzis28, issue #1](https://github.com/braticks/zalgiris-card/issues/1).
-
-```yaml
-type: custom:zalgiris-card
-entity: sensor.zalgiris_rungtyniu_sarasas
-count: 5
-league: eurolyga
-venue: home
-show_filters: true
-accent: date
-```
-
-| Parinktis | Numatyta | Galimos reikšmės |
+| Korta | YAML tipas | Dokumentacija |
 | --- | --- | --- |
-| `league` | `all` | `all`, `eurolyga`, `lkl`, `kmt` arba sąrašas, pvz. `[eurolyga, lkl]` |
-| `venue` | `all` | `all`, `home`, `away` |
-| `show_filters` | `false` | Rodyti lygos ir namų / išvykos mygtukus |
-| `accent` | `time` | `date` išryškina datą; `time` išlaiko esamą vaizdą |
+| Lietuviška data | `custom:ha-lithuanian-date-card` | [Nustatymai](cards/ha-lithuanian-date-card/README.md) |
+| Žalgirio rungtynės | `custom:zalgiris-card` | [Nustatymai](cards/zalgiris-card/README.md) |
+| Eurolygos lentelė | `custom:euroleague-standings-card` | [Nustatymai](cards/euroleague-standings/README.md) |
+| LKL lentelė | `custom:lkl-standings-card` | [Nustatymai](cards/lkl-standings/README.md) |
+| Mėnesio kalendorius | `custom:ha-month-calendar-card` | [Nustatymai](cards/ha-month-calendar-card/README.md) |
+| 3D spausdintuvas | `custom:threedy-card` | [Nustatymai](cards/ha-threedy-card/README.md) |
 
-Lygos ir vietos filtrai veikia kartu, pagrindinėms rungtynėms ir sąrašui. `all` apima ir draugiškas ar nežinomos lygos rungtynes. Kelios lygos pasirenkamos YAML sąrašu; paspaudus lygos mygtuką pasirenkama viena lyga. Mygtukų pasirinkimai galioja tik tai kortai iki jos perkūrimo ar puslapio perkrovimo; tada vėl taikomas YAML. Nustatymai nesaugomi naršyklėje ir nesimaišo tarp kortų.
-
-Integracijos keisti nereikia, papildomų užklausų serveriui filtrai nesiunčia. `accent` keičia būsimos dvikovos ir sąrašo datos / laiko išdėstymą; rezultatų rodymas lieka toks pats.
-
-English: optional league and home/away filters apply to both the main game and schedule. Filter buttons are off by default; `accent: time` preserves the existing appearance. Button selections are local to each card instance and reset to YAML on reload.
-
-## Būtina integracija
-
-Kortos versija: **2.0.4**. Rekomenduojama integracija: **2.0.6** arba naujesnė.
-
-Rezultatai atnaujinami integracijos nustatytu intervalu (numatyta 10 min.), ne nuolatiniu srautu. Be patvirtinto `is_live` lauko korta pirmas 3 valandas rodo „Prasidėjo pagal tvarkaraštį“, o vėliau „Praėjusios rungtynės“ — tai nėra patvirtinta rungtynių būsena. Transliuotojas ir rezultatas matomi tik gavus šiuos duomenis iš integracijos.
-
-Pirmiausia įdiekite ir sukonfigūruokite [Žalgiris Matches](https://github.com/braticks/zalgiris_matches). Kortai reikalingas integracijos rungtynių sąrašo sensorius.
+Pirmoje versijoje Threedy yra `2026.10.0-beta.1`, todėl šis paketas kol kas beta.
 
 ## Diegimas per HACS
 
-1. HACS atidarykite `Custom repositories`.
-2. Pridėkite `https://github.com/braticks/zalgiris-card`.
-3. Pasirinkite kategoriją `Dashboard`.
-4. Įdiekite `Žalgiris Card`.
-5. Jei korta neatsirado iš karto, perkraukite naršyklę išvalydami podėlį.
+1. HACS → Custom repositories: `https://github.com/braticks/braticks-cards`, kategorija **Dashboard**.
+2. Atsisiųskite **Braticks Cards**.
+3. Dashboard resursuose patikrinkite, kad yra tik vienas šio paketo resursas:
+   `/hacsfiles/braticks-cards/braticks-cards.js`, tipas **JavaScript module**.
+4. Perkraukite naršyklės puslapį. Kortų YAML tipus pasirinkite iš lentelės.
 
-## Rankinis diegimas
+Eurolygos, LKL ir Žalgirio duomenų integracijos vis dar diegiamos atskirai. Šis paketas pateikia kortas, o ne jų sensorius.
 
-1. Atsisiųskite `zalgiris-card.js` į `/config/www/`.
-2. Dashboard ištekliuose pridėkite `/local/zalgiris-card.js` kaip `JavaScript Module`.
+## Perėjimas iš senų kortų
 
-## Naudojimas
+Išsisaugokite dashboard konfigūraciją. Pašalinkite senus atskirus HACS **kortų** paketus ir jų dashboard resursus, tada įdiekite šį paketą. Duomenų integracijų nešalinkite. Dashboard YAML kortų tipai bei nustatymai lieka tie patys.
 
-```yaml
-type: custom:zalgiris-card
-entity: sensor.zalgiris_rungtyniu_sarasas
-count: 5
-show_league: true
-```
+Eurolygos ir LKL integracijos automatiškai pateikia savo kortas. Jų resursus galima palikti: paketo įkėliklis praleidžia jau registruotą kortą. Tuomet naudojama pirmoji įkelta kortos versija; norint garantuoti paketo versiją, reikia koordinuoto integracijos pakeitimo. Senų atskirų kortų resursų nepalikite, nes jie gali įkelti senesnę versiją arba sukelti registravimo konfliktą.
 
-Jeigu jūsų sensoriaus `entity_id` skiriasi, pakeiskite jį kortos konfigūracijoje.
+Nepridėkite kiekvieno paketo JS failo kaip atskiro resurso. Pakanka `braticks-cards.js`; jis įkelia ir kalendoriaus redaktorių. Naujos paketo kortos ateityje atkeliaus su HACS atnaujinimais.
 
-| Parinktis | Būtina | Numatyta reikšmė | Aprašymas |
-| --- | --- | --- | --- |
-| `entity` | Taip | – | „Žalgiris Matches“ rungtynių sąrašo sensorius |
-| `count` | Ne | `5` | Kiek artėjančių rungtynių rodyti (1–20) |
-| `show_league` | Ne | `true` | Ar virš pagrindinių rungtynių rodyti turnyrą |
+## Priežiūra
 
-## English
+Kortų šaltiniai, originalūs README ir priskyrimai yra `cards/`. `sources.json` nurodo perkeltų šaltinių commit. Archyvuoto Eurolygos kortos repozitoriumo versija neperkelta: naudojamas naujesnis šaltinis iš Eurolygos integracijos.
 
-Home Assistant Lovelace card for the [Žalgiris Matches](https://github.com/braticks/zalgiris_matches) integration. It displays the next game, team logos, competition, broadcaster, kickoff time, live score and upcoming games.
+Keičiant paprastas kortas, redaguokite `cards/` šaltinį ir paleiskite `npm run build`. Threedy pakeitimams pirma sukurkite jos JS failą `cards/ha-threedy-card` kataloge pagal originalią instrukciją, tada paleiskite paketo build. Integracijų Python kopijos saugomos šaltinių kontekstui ir per šį kortų paketą nediegiamos.
 
-Install this repository through HACS as a `Dashboard` custom repository, then use:
-
-```yaml
-type: custom:zalgiris-card
-entity: sensor.zalgiris_rungtyniu_sarasas
-count: 5
-show_league: true
-```
-
-Replace the entity ID if Home Assistant generated a different one.
-
-## Problemos ir pasiūlymai
-
-Praneškite apie klaidas per [GitHub Issues](https://github.com/braticks/zalgiris-card/issues).
+`npm test` tikrina bendro įkėliklio veikimą. Licencijos ir autorių priskyrimai išsaugoti šaltinių kataloguose; Threedy trečiųjų šalių priskyrimai pateikiami ir `dist/`. Paketas nesuteikia naujos bendros licencijos kortoms, kurių šaltiniuose ji nenurodyta.

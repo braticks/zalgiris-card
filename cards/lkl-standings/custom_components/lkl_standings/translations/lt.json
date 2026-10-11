@@ -1,0 +1,14 @@
+{
+  "title": "LKL turnyrinė lentelė",
+  "config": {
+    "step": {
+      "user": {
+        "title": "LKL turnyrinė lentelė",
+        "description": "Pridėti dabartinio LKL sezono turnyrinę lentelę iš lkl.lt."
+      }
+    },
+    "abort": {
+      "already_configured": "LKL turnyrinė lentelė jau pridėta."
+    }
+  }
+}
